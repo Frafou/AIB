@@ -1,6 +1,10 @@
 # This code is based off of "Create a Windows Custom Managed IMage from an Azure Platform Vanilla OS Image."
 # https://github.com/danielsollondon/azvmimagebuilder/tree/master/quickquickstarts/0_Creating_a_Custom_Windows_Managed_Image
-
+<# Updated lines:
+    62 -api-version "2024-02-01" -> New api version
+    74 Get-AzImageBuilderTemplateRunOutput -> new name for cmdlet
+    89-107 -> updated to let you select the image thru quieries and out-gridview as old values where no longer fonctional
+#>
 
 # Start by downloading a template
 # The template used is from the Azure Quick Start templates
@@ -58,7 +62,7 @@ Install-Module -name 'Az.ImageBuilder' -AllowPrerelease
 
 # Run the deployment
 New-AzResourceGroupDeployment -ResourceGroupName $imageResourceGroup -TemplateFile $templateFilePath `
--api-version "2019-05-01-preview" -imageTemplateName $imageTemplateName -svclocation $location
+-api-version "2024-02-01" -imageTemplateName $imageTemplateName -svclocation $location
 
 # Verify the template
 Get-AzImageBuilderTemplate -ImageTemplateName $imageTemplateName -ResourceGroupName $imageResourceGroup |
@@ -69,7 +73,7 @@ Start-AzImageBuilderTemplate -ResourceGroupName $imageResourceGroup -Name $image
 
 # Create a VM to test 
 $Cred = Get-Credential 
-$ArtifactId = (Get-AzImageBuilderRunOutput -ImageTemplateName $imageTemplateName -ResourceGroupName $imageResourceGroup).ArtifactId
+$ArtifactId = (Get-AzImageBuilderTemplateRunOutput -ImageTemplateName $imageTemplateName -ResourceGroupName $imageResourceGroup).ArtifactId
 New-AzVM -ResourceGroupName $imageResourceGroup -Image $ArtifactId -Name myWinVM01 -Credential $Cred -size Standard_D2_v2
 
 # Remove the template deployment
@@ -83,14 +87,22 @@ remove-AzImageBuilderTemplate -ImageTemplateName $imageTemplateName -ResourceGro
 # To use for the deployment template to identify 
 # source marketplace images
 # https://www.ciraltos.com/find-skus-images-available-azure-rm/
-Get-AzVMImagePublisher -Location $location | where-object {$_.PublisherName -like "*win*"} | ft PublisherName,Location
-$pubName = 'MicrosoftWindowsDesktop'
-Get-AzVMImageOffer -Location $location -PublisherName $pubName | ft Offer,PublisherName,Location
-# Set Offer to 'office-365' for images with O365 
+This provides and option to select the proper image via Out-Gridview
+
+Get-AzVMImagePublisher -Location $location | Where-Object { $_.PublisherName -like '*win*' } | Format-Table PublisherName, Location
+# $pubName = 'MicrosoftWindowsDesktop'
+$pubName = (Get-AzVMImagePublisher -Location $location | Where-Object { $_.PublisherName -like '*win*' } | Out-GridView -OutputMode Single).PublisherName
+
+Get-AzVMImageOffer -Location $location -PublisherName $pubName | Format-Table Offer, PublisherName, Location
+# Set Offer to 'office-365' for images with O365
 # $offerName = 'office-365'
-$offerName = 'Windows-10'
-Get-AzVMImageSku -Location $location -PublisherName $pubName -Offer $offerName | ft Skus,Offer,PublisherName,Location
-$skuName = '20h1-evd'
+# $offerName = 'Windows-11'
+$offerName = (Get-AzVMImageOffer -Location $location -PublisherName $pubName | Out-GridView -OutputMode Single).offer
+
+Get-AzVMImageSku -Location $location -PublisherName $pubName -Offer $offerName | Format-Table Skus, Offer, PublisherName, Location
+# $skuName = 'win11-23h2-pro'
+$skuName = (Get-AzVMImageSku -Location $location -PublisherName $pubName -Offer $offerName | Out-GridView -OutputMode Single).skus
+
 Get-AzVMImage -Location $location -PublisherName $pubName -Skus $skuName -Offer $offerName
-$version = '19041.572.2010091946'
-Get-AzVMImage -Location $location -PublisherName $pubName -Offer $offerName -Skus $skuName -Version $version
+#$version = '22631.4169.240906'
+$version = (Get-AzVMImage -Location $location -PublisherName $pubName -Skus $skuName -Offer $offerName | Out-GridView -OutputMode Single).version
